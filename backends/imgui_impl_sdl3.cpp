@@ -590,7 +590,22 @@ static void ImGui_ImplSDL3_UpdateMouseData()
             int window_x, window_y;
             SDL_GetGlobalMouseState(&mouse_x_global, &mouse_y_global);
             SDL_GetWindowPosition(focused_window, &window_x, &window_y);
+#ifdef __APPLE__
+            // Hack to fix Retina mouse coordinates on Mac
+            int w, h, display_w, display_h;
+            SDL_GetWindowSize(bd->Window, &w, &h);
+            if (SDL_GetWindowFlags(bd->Window) & SDL_WINDOW_MINIMIZED)
+                w = h = 0;
+            if (bd->Renderer != nullptr)
+                SDL_GetRendererOutputSize(bd->Renderer, &display_w, &display_h);
+            else
+                SDL_GetWindowSizeInPixels(bd->Window, &display_w, &display_h);
+            float scale = display_h / h;
+            
+            io.AddMousePosEvent(scale * (mouse_x_global - window_x), scale * (mouse_y_global - window_y));
+#else
             io.AddMousePosEvent(mouse_x_global - window_x, mouse_y_global - window_y);
+#endif
         }
     }
 }
@@ -743,6 +758,15 @@ void ImGui_ImplSDL3_NewFrame()
     io.DisplaySize = ImVec2((float)w, (float)h);
     if (w > 0 && h > 0)
         io.DisplayFramebufferScale = ImVec2((float)display_w / w, (float)display_h / h);
+
+#if defined(__APPLE__)
+    // Hack to fix Retina scaling on Mac
+    if (display_h != h)
+    {
+        io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+        io.DisplaySize = ImVec2((float)display_w, (float)display_h);
+    }
+#endif
 
     // Setup time step (we don't use SDL_GetTicks() because it is using millisecond resolution)
     // (Accept SDL_GetPerformanceCounter() not returning a monotonically increasing value. Happens in VMs and Emscripten, see #6189, #6114, #3644)
